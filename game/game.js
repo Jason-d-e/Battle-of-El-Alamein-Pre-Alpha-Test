@@ -5800,8 +5800,20 @@
     if (!app.state) return;
     const count = app.training.entries.length;
     const eventCount = app.training.events.length;
-    const card = operationCard("AI Training", `${count} preference samples\n${eventCount} replay events`, count || eventCount ? "good" : "");
-    card.classList.add("training-record-card");
+    const card = document.createElement("details");
+    card.className = "operation-card training-record-card";
+    if (count || eventCount) card.dataset.severity = "good";
+
+    const summary = document.createElement("summary");
+    summary.textContent = "AI Training";
+    card.append(summary);
+
+    const content = document.createElement("div");
+    content.className = "training-record-content";
+    content.append(
+      line(`${count} preference samples`),
+      line(`${eventCount} replay events`),
+    );
     const actions = document.createElement("div");
     actions.className = "training-actions";
     const exportButton = document.createElement("button");
@@ -5815,7 +5827,8 @@
     clearButton.disabled = count <= 0 && eventCount <= 0;
     clearButton.addEventListener("click", clearTrainingEntries);
     actions.append(exportButton, clearButton);
-    card.append(actions);
+    content.append(actions);
+    card.append(content);
     el.operationsFocus.append(card);
   }
 
