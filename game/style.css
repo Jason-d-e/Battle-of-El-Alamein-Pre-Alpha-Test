@@ -212,9 +212,9 @@ body[data-view="aar"] .game-view {
 }
 
 .topbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 16px;
   padding: 12px 16px;
   border-bottom: 2px solid #b9a46c;
@@ -223,8 +223,9 @@ body[data-view="aar"] .game-view {
 }
 
 .game-title {
-  grid-column: 2;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  align-self: stretch;
 }
 
 .topbar h1 {
@@ -248,8 +249,6 @@ body[data-view="aar"] .game-view {
 }
 
 .actions {
-  grid-column: 3;
-  justify-self: end;
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -1218,14 +1217,8 @@ body[data-lang="zh"] .aar-shell h2 {
 
 @media (max-width: 640px) {
   .topbar {
-    grid-template-columns: 1fr;
     align-items: stretch;
-  }
-
-  .game-title,
-  .actions {
-    grid-column: 1;
-    justify-self: stretch;
+    flex-direction: column;
   }
 
   .actions {
