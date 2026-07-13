@@ -21,6 +21,23 @@ export const TACTICAL_REASON = Object.freeze({
 
 const OPPOSITE_SIDE = Object.freeze({ axis: "allied", allied: "axis" });
 
+export function filterImmediateMovementTacticalActions(actions = [], options = {}) {
+  const side = options.side;
+  const destinationHexIds = side === "axis"
+    ? options.axisObjectiveHexIds
+    : side === "allied"
+      ? options.alliedExitHexIds
+      : [];
+  const destinations = new Set(destinationHexIds || []);
+  if (!destinations.size) return [];
+
+  return actions.filter((action) => (
+    action?.type === ENV_ACTION.MOVE_UNIT
+    && destinations.has(action.toHexId)
+    && (side !== "allied" || Number(action.route?.remaining || 0) > 0)
+  ));
+}
+
 export function findImmediateTacticalAction(environment, actions = null, options = {}) {
   const side = options.side || activeSide(environment);
   const candidates = actions || generateLegalActions(environment, { includeChanceActions: true });

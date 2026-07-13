@@ -2476,9 +2476,7 @@
   }
 
   function chooseAiTacticalMove(unit, reachable) {
-    if (!app.aiTactics?.findImmediateTacticalAction || !app.core?.ENV_ACTION) return null;
-    const environment = aiSearchEnvironment();
-    if (!environment) return null;
+    if (!app.aiTactics?.findImmediateTacticalAction || !app.aiTactics?.filterImmediateMovementTacticalActions || !app.core?.ENV_ACTION) return null;
     const actions = Array.from(reachable.entries()).map(([hexId, route]) => ({
       type: app.core.ENV_ACTION.MOVE_UNIT,
       unitId: unit.id,
@@ -2486,7 +2484,15 @@
       toHexId: hexId,
       route,
     }));
-    const tactical = app.aiTactics.findImmediateTacticalAction(environment, actions, { side: unit.side });
+    const tacticalActions = app.aiTactics.filterImmediateMovementTacticalActions(actions, {
+      side: unit.side,
+      axisObjectiveHexIds: axisObjectiveHexes(),
+      alliedExitHexIds: app.scenario.objectives.alliedWestExitEdge,
+    });
+    if (!tacticalActions.length) return null;
+    const environment = aiSearchEnvironment();
+    if (!environment) return null;
+    const tactical = app.aiTactics.findImmediateTacticalAction(environment, tacticalActions, { side: unit.side });
     if (!tactical || tactical.action?.type !== app.core.ENV_ACTION.MOVE_UNIT) return null;
     const route = reachable.get(tactical.action.toHexId);
     return route ? { hexId: tactical.action.toHexId, route, reachable, tacticalReason: tactical.reason } : null;
