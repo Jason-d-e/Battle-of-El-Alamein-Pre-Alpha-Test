@@ -2425,7 +2425,6 @@
       const reachable = reachableHexes(unit);
       const route = reachable.get(action.toHexId);
       if (!route) continue;
-      if (isAiMoveTacticallyUnsafe(unit, action.toHexId, route)) continue;
       app.state.selectedUnitId = unit.id;
       app.reachable = new Map([[action.toHexId, route]]);
       drawAnimationFrame();
@@ -2461,7 +2460,6 @@
     let best = null;
     let scored = 0;
     for (const candidate of prioritizedAiMoveCandidates(unit, reachable)) {
-      if (isAiMoveTacticallyUnsafe(unit, candidate.hexId, candidate.route)) continue;
       const detailed = scoreAiHex(unit, candidate.hexId, candidate.route, scoreContext);
       const score = detailed + candidate.rough * 0.06;
       if (!best || score > best.score) best = { hexId: candidate.hexId, route: candidate.route, score };
@@ -2496,19 +2494,6 @@
     if (!tactical || tactical.action?.type !== app.core.ENV_ACTION.MOVE_UNIT) return null;
     const route = reachable.get(tactical.action.toHexId);
     return route ? { hexId: tactical.action.toHexId, route, reachable, tacticalReason: tactical.reason } : null;
-  }
-
-  function isAiMoveTacticallyUnsafe(unit, hexId, route) {
-    if (!app.aiTactics?.actionAllowsOpponentImmediateWin || !app.core?.ENV_ACTION) return false;
-    const environment = aiSearchEnvironment();
-    if (!environment) return false;
-    return app.aiTactics.actionAllowsOpponentImmediateWin(environment, {
-      type: app.core.ENV_ACTION.MOVE_UNIT,
-      unitId: unit.id,
-      fromHexId: unit.hexId,
-      toHexId: hexId,
-      route,
-    }, { side: unit.side });
   }
 
   function buildAiMoveScoreContext(unit) {
