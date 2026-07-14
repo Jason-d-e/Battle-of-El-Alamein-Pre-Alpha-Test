@@ -19,6 +19,18 @@
         <section class="mode-choice" aria-label="Game mode selection">
           <p data-i18n="menu.modeLabel">Game mode</p>
           <div class="mode-choice-buttons">
+            <button id="axisAiModeButton" type="button" data-game-mode="axis-vs-ai">
+              <img class="mode-flag" src="local-assets/ui/axis-human-flag.png" alt="" aria-hidden="true" />
+              <span class="mode-side" data-i18n="side.axis">Axis</span>
+              <span class="mode-versus">vs</span>
+              <span data-i18n="side.allied">Allied</span>
+            </button>
+            <button id="alliedAiModeButton" type="button" data-game-mode="allied-vs-ai">
+              <img class="mode-flag" src="local-assets/ui/allied-human-flag.png" alt="" aria-hidden="true" />
+              <span class="mode-side" data-i18n="side.allied">Allied</span>
+              <span class="mode-versus">vs</span>
+              <span data-i18n="side.axis">Axis</span>
+            </button>
             <button id="hotseatModeButton" type="button" data-game-mode="hotseat" data-i18n="menu.hotseatMode">Hotseat</button>
           </div>
         </section>
@@ -146,6 +158,6 @@
       </div>
     </template>
 
-    <script src="game.js?v=20260714-foundation-hotseat-1" defer></script>
+    <script src="game.js?v=20260714-foundation-scripted-ai-1" defer></script>
   </body>
 </html>

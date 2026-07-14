@@ -491,12 +491,12 @@
   });
 
   Object.assign(I18N.zh.menu, {
-    modeLabel: "基础对局模式",
-    hotseatMode: "双人热座（记录训练数据）",
+    modeLabel: "选择模式",
+    hotseatMode: "热座模式",
   });
   Object.assign(I18N.en.menu, {
-    modeLabel: "Foundation Game Mode",
-    hotseatMode: "Player vs Player (records training data)",
+    modeLabel: "Choose Mode",
+    hotseatMode: "Hotseat Mode",
   });
   Object.assign(I18N.zh.ui, {
     aiThinking: "AI \u6b63\u5728\u6307\u6325 {side}",
@@ -649,7 +649,9 @@
   }
 
   function getSavedGameMode() {
-    return "hotseat";
+    const savedMode = localStorage.getItem(AI_GAME_MODE_KEY);
+    if (["axis-vs-ai", "allied-vs-ai", "hotseat"].includes(savedMode)) return savedMode;
+    return localStorage.getItem(AI_HUMAN_SIDE_KEY) === "allied" ? "allied-vs-ai" : "axis-vs-ai";
   }
 
   function humanSideForMode(mode) {
@@ -1265,8 +1267,8 @@
     el.boardSurface.addEventListener("click", onBoardClick);
     el.langZhButton.addEventListener("click", () => setLanguage("zh"));
     el.langEnButton.addEventListener("click", () => setLanguage("en"));
-    el.axisAiModeButton?.addEventListener("click", setGameMode);
-    el.alliedAiModeButton?.addEventListener("click", setGameMode);
+    el.axisAiModeButton.addEventListener("click", () => setGameMode("axis-vs-ai"));
+    el.alliedAiModeButton.addEventListener("click", () => setGameMode("allied-vs-ai"));
     el.hotseatModeButton.addEventListener("click", () => setGameMode("hotseat"));
     el.startCampaignButton.addEventListener("click", startNewCampaign);
     el.continueCampaignButton.addEventListener("click", continueCampaign);
@@ -1308,8 +1310,8 @@
     drawAiControls();
   }
 
-  function setGameMode() {
-    app.ai.mode = "hotseat";
+  function setGameMode(mode) {
+    app.ai.mode = ["axis-vs-ai", "allied-vs-ai", "hotseat"].includes(mode) ? mode : "axis-vs-ai";
     app.ai.humanSide = humanSideForMode(app.ai.mode);
     app.ai.waitingForHuman = false;
     app.ai.scheduled = false;
