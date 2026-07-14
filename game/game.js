@@ -491,24 +491,34 @@
   });
 
   Object.assign(I18N.zh.menu, {
-    modeLabel: "选择模式",
-    hotseatMode: "热座模式",
+    modeLabel: "基础对局模式",
+    hotseatMode: "双人热座（记录训练数据）",
   });
   Object.assign(I18N.en.menu, {
-    modeLabel: "Choose Mode",
-    hotseatMode: "Hotseat Mode",
+    modeLabel: "Foundation Game Mode",
+    hotseatMode: "Player vs Player (records training data)",
   });
   Object.assign(I18N.zh.ui, {
     aiThinking: "AI \u6b63\u5728\u6307\u6325 {side}",
     aiAwaitingInput: "AI \u5df2\u5b8c\u6210\u52a8\u4f5c\uff0c\u8bf7\u70b9\u51fb\u9636\u6bb5\u6309\u94ae\u7ee7\u7eed",
     aiWaiting: "\u4f60\u6307\u6325 {side}\uff0cAI \u6307\u6325 {enemy}",
     hotseatStatus: "",
+    trainingData: "训练数据",
+    preferenceSamples: "{count} 个偏好样本",
+    replayEvents: "{count} 个回放事件",
+    exportJson: "导出 JSON",
+    clearTrainingData: "清除",
   });
   Object.assign(I18N.en.ui, {
     aiThinking: "AI is commanding {side}",
     aiAwaitingInput: "AI has finished. Use the phase buttons to continue",
     aiWaiting: "You command {side}; AI commands {enemy}",
     hotseatStatus: "",
+    trainingData: "Training Data",
+    preferenceSamples: "{count} preference samples",
+    replayEvents: "{count} replay events",
+    exportJson: "Export JSON",
+    clearTrainingData: "Clear",
   });
   Object.assign(I18N.zh.text, {
     aiMovementDone: "AI 完成 {side} 移动。",
@@ -639,9 +649,7 @@
   }
 
   function getSavedGameMode() {
-    const savedMode = localStorage.getItem(AI_GAME_MODE_KEY);
-    if (["axis-vs-ai", "allied-vs-ai", "hotseat"].includes(savedMode)) return savedMode;
-    return localStorage.getItem(AI_HUMAN_SIDE_KEY) === "allied" ? "allied-vs-ai" : "axis-vs-ai";
+    return "hotseat";
   }
 
   function humanSideForMode(mode) {
@@ -1257,8 +1265,8 @@
     el.boardSurface.addEventListener("click", onBoardClick);
     el.langZhButton.addEventListener("click", () => setLanguage("zh"));
     el.langEnButton.addEventListener("click", () => setLanguage("en"));
-    el.axisAiModeButton.addEventListener("click", () => setGameMode("axis-vs-ai"));
-    el.alliedAiModeButton.addEventListener("click", () => setGameMode("allied-vs-ai"));
+    el.axisAiModeButton?.addEventListener("click", setGameMode);
+    el.alliedAiModeButton?.addEventListener("click", setGameMode);
     el.hotseatModeButton.addEventListener("click", () => setGameMode("hotseat"));
     el.startCampaignButton.addEventListener("click", startNewCampaign);
     el.continueCampaignButton.addEventListener("click", continueCampaign);
@@ -1300,8 +1308,8 @@
     drawAiControls();
   }
 
-  function setGameMode(mode) {
-    app.ai.mode = ["axis-vs-ai", "allied-vs-ai", "hotseat"].includes(mode) ? mode : "axis-vs-ai";
+  function setGameMode() {
+    app.ai.mode = "hotseat";
     app.ai.humanSide = humanSideForMode(app.ai.mode);
     app.ai.waitingForHuman = false;
     app.ai.scheduled = false;
@@ -5808,25 +5816,25 @@
     if (count || eventCount) card.dataset.severity = "good";
 
     const summary = document.createElement("summary");
-    summary.textContent = "AI Training";
+    summary.textContent = tr("ui.trainingData");
     card.append(summary);
 
     const content = document.createElement("div");
     content.className = "training-record-content";
     content.append(
-      line(`${count} preference samples`),
-      line(`${eventCount} replay events`),
+      line(tr("ui.preferenceSamples", { count })),
+      line(tr("ui.replayEvents", { count: eventCount })),
     );
     const actions = document.createElement("div");
     actions.className = "training-actions";
     const exportButton = document.createElement("button");
     exportButton.type = "button";
-    exportButton.textContent = "Export JSON";
+    exportButton.textContent = tr("ui.exportJson");
     exportButton.disabled = count <= 0 && eventCount <= 0;
     exportButton.addEventListener("click", exportTrainingEntries);
     const clearButton = document.createElement("button");
     clearButton.type = "button";
-    clearButton.textContent = "Clear";
+    clearButton.textContent = tr("ui.clearTrainingData");
     clearButton.disabled = count <= 0 && eventCount <= 0;
     clearButton.addEventListener("click", clearTrainingEntries);
     actions.append(exportButton, clearButton);
