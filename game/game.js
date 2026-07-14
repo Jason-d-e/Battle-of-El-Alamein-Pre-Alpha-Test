@@ -16,6 +16,7 @@
   const AI_SCORE_BATCH_SIZE = 1;
   const OPPOSITE_SIDE = { axis: "allied", allied: "axis" };
   const coreRulesPromise = import("./src/core/index.js?v=20260709-zoc-step-1");
+  const phaseFlowPromise = import("./src/app/phase-flow.js?v=20260714-empty-movement-confirm-1");
   const aiHeuristicsPromise = import("./src/app/ai-heuristics.js?v=20260708-ai-heuristics-16");
   const aiPhaseSearchPromise = import("./src/app/ai-phase-search.js?v=20260709-ai-projection-1");
   const aiTacticsPromise = import("./src/app/ai-tactics.js?v=20260708-ai-tactics-1");
@@ -99,6 +100,7 @@
         resolveBattle: "结算下一战斗",
         done: "战斗结束",
         endPhase: "结束阶段",
+        confirmEmptyMovementPhaseEnd: "本移动阶段尚未移动任何单位。确认已经完成移动并结束阶段吗？",
         selectedUnit: "选中单位",
         combat: "战斗",
         operationsKicker: "Operations Board",
@@ -225,6 +227,7 @@
         resolveBattle: "Resolve Next Combat",
         done: "Combat Complete",
         endPhase: "End Phase",
+        confirmEmptyMovementPhaseEnd: "No units have moved during this movement phase. Are you sure you are finished moving and want to end the phase?",
         selectedUnit: "Selected Unit",
         combat: "Combat",
         operationsKicker: "Operations Board",
@@ -577,6 +580,7 @@
 
   const app = {
     core: null,
+    phaseFlow: null,
     aiHeuristics: null,
     aiPhaseSearch: null,
     aiTactics: null,
@@ -1197,8 +1201,9 @@
 
   async function init() {
     try {
-      const [core, aiHeuristics, aiPhaseSearch, aiTactics, scenario, rules, aiWeights] = await Promise.all([
+      const [core, phaseFlow, aiHeuristics, aiPhaseSearch, aiTactics, scenario, rules, aiWeights] = await Promise.all([
         coreRulesPromise,
+        phaseFlowPromise,
         aiHeuristicsPromise,
         aiPhaseSearchPromise,
         aiTacticsPromise,
@@ -1207,6 +1212,7 @@
         fetchJson("local-data/ai-weights-expert.json").catch(() => null),
       ]);
       app.core = core;
+      app.phaseFlow = phaseFlow;
       app.aiHeuristics = aiHeuristics;
       app.aiPhaseSearch = aiPhaseSearch;
       app.aiTactics = aiTactics;
@@ -5030,6 +5036,12 @@
     if (isCombatPhase() && app.state.combatMode === "declare" && app.state.declaredCombats.length) {
       log(tr("ui.finishDeclarations"));
       draw();
+      return;
+    }
+    if (app.phaseFlow.shouldConfirmEmptyMovementPhaseEnd({
+      phase: phase(),
+      movedUnits: app.state.movedUnits,
+    }) && !window.confirm(tr("ui.confirmEmptyMovementPhaseEnd"))) {
       return;
     }
     const eventStateBefore = clone(app.state);
