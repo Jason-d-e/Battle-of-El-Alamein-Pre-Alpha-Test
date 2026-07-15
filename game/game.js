@@ -8,6 +8,7 @@
   const LANG_KEY = "zizi-el-alamein-lang";
   const AI_HUMAN_SIDE_KEY = "zizi-el-alamein-human-side-v1";
   const AI_GAME_MODE_KEY = "zizi-el-alamein-game-mode-v1";
+  const MAP_ZOOM_KEY = "zizi-el-alamein-map-zoom-v1";
   const TRAINING_LOG_KEY = "zizi-el-alamein-training-log-v1";
   const TRAINING_EVENT_KEY = "zizi-el-alamein-training-events-v1";
   const TRAINING_SESSION_KEY = "zizi-el-alamein-training-session-v1";
@@ -17,6 +18,7 @@
   const OPPOSITE_SIDE = { axis: "allied", allied: "axis" };
   const coreRulesPromise = import("./src/core/index.js?v=20260709-zoc-step-1");
   const phaseFlowPromise = import("./src/app/phase-flow.js?v=20260714-empty-movement-confirm-1");
+  const mapZoomPromise = import("./src/app/map-zoom.js?v=20260714-map-zoom-2");
   const aiHeuristicsPromise = import("./src/app/ai-heuristics.js?v=20260708-ai-heuristics-16");
   const aiPhaseSearchPromise = import("./src/app/ai-phase-search.js?v=20260709-ai-projection-1");
   const aiTacticsPromise = import("./src/app/ai-tactics.js?v=20260708-ai-tactics-1");
@@ -100,6 +102,9 @@
         resolveBattle: "结算下一战斗",
         done: "战斗结束",
         endPhase: "结束阶段",
+        mapZoom: "地图缩放",
+        mapZoomOut: "缩小地图",
+        mapZoomIn: "放大地图",
         confirmEmptyMovementPhaseEnd: "本移动阶段尚未移动任何单位。确认已经完成移动并结束阶段吗？",
         selectedUnit: "选中单位",
         combat: "战斗",
@@ -227,6 +232,9 @@
         resolveBattle: "Resolve Next Combat",
         done: "Combat Complete",
         endPhase: "End Phase",
+        mapZoom: "Map zoom",
+        mapZoomOut: "Zoom map out",
+        mapZoomIn: "Zoom map in",
         confirmEmptyMovementPhaseEnd: "No units have moved during this movement phase. Are you sure you are finished moving and want to end the phase?",
         selectedUnit: "Selected Unit",
         combat: "Combat",
@@ -552,6 +560,11 @@
     unitLayer: document.getElementById("unitLayer"),
     boardSurface: document.getElementById("boardSurface"),
     boardViewport: document.getElementById("boardViewport"),
+    mapZoomStage: document.getElementById("mapZoomStage"),
+    mapZoomControls: document.getElementById("mapZoomControls"),
+    mapZoomOutButton: document.getElementById("mapZoomOutButton"),
+    mapZoomOutput: document.getElementById("mapZoomOutput"),
+    mapZoomInButton: document.getElementById("mapZoomInButton"),
     boardBadge: document.getElementById("boardBadge"),
     turnLabel: document.getElementById("turnLabel"),
     phaseLabel: document.getElementById("phaseLabel"),
@@ -591,6 +604,8 @@
   const app = {
     core: null,
     phaseFlow: null,
+    mapZoom: null,
+    mapZoomLevel: 1,
     aiHeuristics: null,
     aiPhaseSearch: null,
     aiTactics: null,
@@ -1211,9 +1226,10 @@
 
   async function init() {
     try {
-      const [core, phaseFlow, aiHeuristics, aiPhaseSearch, aiTactics, scenario, rules, aiWeights] = await Promise.all([
+      const [core, phaseFlow, mapZoom, aiHeuristics, aiPhaseSearch, aiTactics, scenario, rules, aiWeights] = await Promise.all([
         coreRulesPromise,
         phaseFlowPromise,
+        mapZoomPromise,
         aiHeuristicsPromise,
         aiPhaseSearchPromise,
         aiTacticsPromise,
@@ -1223,6 +1239,8 @@
       ]);
       app.core = core;
       app.phaseFlow = phaseFlow;
+      app.mapZoom = mapZoom;
+      app.mapZoomLevel = app.mapZoom.normalizeMapZoom(localStorage.getItem(MAP_ZOOM_KEY));
       app.aiHeuristics = aiHeuristics;
       app.aiPhaseSearch = aiPhaseSearch;
       app.aiTactics = aiTactics;
@@ -1236,6 +1254,7 @@
       app.distanceCache.clear();
       app.state = makeInitialState();
       wireUi();
+      applyMapZoom(app.mapZoomLevel, { preserveCenter: false, persist: false });
       loadImages();
       applyLanguage();
       updateMenu();
@@ -1265,6 +1284,8 @@
 
   function wireUi() {
     el.boardSurface.addEventListener("click", onBoardClick);
+    el.mapZoomOutButton.addEventListener("click", () => changeMapZoom(-1));
+    el.mapZoomInButton.addEventListener("click", () => changeMapZoom(1));
     el.langZhButton.addEventListener("click", () => setLanguage("zh"));
     el.langEnButton.addEventListener("click", () => setLanguage("en"));
     el.axisAiModeButton.addEventListener("click", () => setGameMode("axis-vs-ai"));
@@ -1308,6 +1329,7 @@
     el.langZhButton.dataset.active = String(app.lang === "zh");
     el.langEnButton.dataset.active = String(app.lang === "en");
     drawAiControls();
+    drawMapZoomControls();
   }
 
   function setGameMode(mode) {
@@ -1478,8 +1500,56 @@
   }
 
   function centerOnOpeningFront() {
-    el.boardViewport.scrollLeft = 360;
+    el.boardViewport.scrollLeft = 360 * app.mapZoomLevel;
     el.boardViewport.scrollTop = 0;
+  }
+
+  function changeMapZoom(direction) {
+    applyMapZoom(app.mapZoom.stepMapZoom(app.mapZoomLevel, direction));
+  }
+
+  function applyMapZoom(nextZoom, { preserveCenter = true, persist = true } = {}) {
+    const currentZoom = app.mapZoom.normalizeMapZoom(app.mapZoomLevel);
+    const normalizedZoom = app.mapZoom.normalizeMapZoom(nextZoom);
+    const nextScroll = preserveCenter
+      ? app.mapZoom.preserveMapViewportCenter({
+          scrollLeft: el.boardViewport.scrollLeft,
+          scrollTop: el.boardViewport.scrollTop,
+          clientWidth: el.boardViewport.clientWidth,
+          clientHeight: el.boardViewport.clientHeight,
+          currentZoom,
+          nextZoom: normalizedZoom,
+        })
+      : null;
+    const stageSize = app.mapZoom.mapZoomStageSize({
+      width: app.scenario.board.width,
+      height: app.scenario.board.height,
+      zoom: normalizedZoom,
+    });
+    app.mapZoomLevel = normalizedZoom;
+    el.mapZoomStage.style.width = `${stageSize.width}px`;
+    el.mapZoomStage.style.height = `${stageSize.height}px`;
+    el.boardSurface.style.transform = `scale(${normalizedZoom})`;
+    if (persist) localStorage.setItem(MAP_ZOOM_KEY, String(normalizedZoom));
+    drawMapZoomControls();
+    if (nextScroll) {
+      el.boardViewport.scrollLeft = nextScroll.scrollLeft;
+      el.boardViewport.scrollTop = nextScroll.scrollTop;
+    }
+  }
+
+  function drawMapZoomControls() {
+    if (!app.mapZoom) return;
+    const levels = app.mapZoom.MAP_ZOOM_LEVELS;
+    const current = app.mapZoom.normalizeMapZoom(app.mapZoomLevel);
+    el.mapZoomControls.setAttribute("aria-label", tr("ui.mapZoom"));
+    el.mapZoomOutButton.setAttribute("aria-label", tr("ui.mapZoomOut"));
+    el.mapZoomOutButton.title = tr("ui.mapZoomOut");
+    el.mapZoomOutButton.disabled = current <= levels[0];
+    el.mapZoomOutput.textContent = app.mapZoom.formatMapZoom(current);
+    el.mapZoomInButton.setAttribute("aria-label", tr("ui.mapZoomIn"));
+    el.mapZoomInButton.title = tr("ui.mapZoomIn");
+    el.mapZoomInButton.disabled = current >= levels[levels.length - 1];
   }
 
   function onBoardClick(event) {

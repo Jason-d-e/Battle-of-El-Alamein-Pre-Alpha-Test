@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>阿拉曼战役 / El Alamein</title>
-    <link rel="stylesheet" href="style.css?v=20260713-pre-alpha-ui-3" />
+    <link rel="stylesheet" href="style.css?v=20260716-foundation-map-zoom-layout-1" />
   </head>
   <body data-view="menu" data-lang="zh">
     <section id="menuView" class="menu-view" aria-label="Main menu">
@@ -61,12 +61,19 @@
       <main class="layout">
         <section class="board-panel" aria-label="Game board">
           <div id="boardViewport" class="board-viewport">
-            <div id="boardSurface" class="board-surface">
-              <img id="mapImage" alt="El Alamein map" />
-              <canvas id="hexLayer" width="2448" height="1696"></canvas>
-              <div id="unitLayer"></div>
-              <div id="boardBadge" class="board-badge"></div>
+            <div id="mapZoomStage" class="map-zoom-stage">
+              <div id="boardSurface" class="board-surface">
+                <img id="mapImage" alt="El Alamein map" />
+                <canvas id="hexLayer" width="2448" height="1696"></canvas>
+                <div id="unitLayer"></div>
+                <div id="boardBadge" class="board-badge"></div>
+              </div>
             </div>
+          </div>
+          <div id="mapZoomControls" class="map-zoom-controls" role="group" aria-label="地图缩放">
+            <button id="mapZoomOutButton" type="button" aria-label="缩小地图" title="缩小地图">−</button>
+            <output id="mapZoomOutput" aria-live="polite">100%</output>
+            <button id="mapZoomInButton" type="button" aria-label="放大地图" title="放大地图">+</button>
           </div>
         </section>
 
@@ -158,6 +165,6 @@
       </div>
     </template>
 
-    <script src="game.js?v=20260714-foundation-scripted-ai-1" defer></script>
+    <script src="game.js?v=20260716-foundation-map-zoom-layout-1" defer></script>
   </body>
 </html>
