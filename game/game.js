@@ -17,7 +17,8 @@
   const OPPOSITE_SIDE = { axis: "allied", allied: "axis" };
   const coreRulesPromise = import("./src/core/index.js?v=20260709-zoc-step-1");
   const phaseFlowPromise = import("./src/app/phase-flow.js?v=20260714-empty-movement-confirm-1");
-  const mapZoomPromise = import("./src/app/map-zoom.js?v=20260716-map-zoom-fit-1");
+  const mapZoomPromise = import("./src/app/map-zoom.js?v=20260716-map-zoom-controls-1");
+  const mapZoomControlsPromise = import("./src/ui/map-zoom-controls.js?v=20260716-map-zoom-controls-1");
   const aiHeuristicsPromise = import("./src/app/ai-heuristics.js?v=20260708-ai-heuristics-16");
   const aiPhaseSearchPromise = import("./src/app/ai-phase-search.js?v=20260709-ai-projection-1");
   const aiTacticsPromise = import("./src/app/ai-tactics.js?v=20260708-ai-tactics-1");
@@ -102,7 +103,8 @@
         done: "战斗结束",
         endPhase: "结束阶段",
         mapZoom: "地图缩放",
-        mapZoomFit: "适应",
+        mapZoomFit: "自适应",
+        mapZoomChoose: "选择地图缩放",
         mapZoomOut: "缩小地图",
         mapZoomIn: "放大地图",
         confirmEmptyMovementPhaseEnd: "本移动阶段尚未移动任何单位。确认已经完成移动并结束阶段吗？",
@@ -234,6 +236,7 @@
         endPhase: "End Phase",
         mapZoom: "Map zoom",
         mapZoomFit: "Fit",
+        mapZoomChoose: "Choose map zoom",
         mapZoomOut: "Zoom map out",
         mapZoomIn: "Zoom map in",
         confirmEmptyMovementPhaseEnd: "No units have moved during this movement phase. Are you sure you are finished moving and want to end the phase?",
@@ -564,6 +567,9 @@
     mapZoomStage: document.getElementById("mapZoomStage"),
     mapZoomControls: document.getElementById("mapZoomControls"),
     mapZoomOutButton: document.getElementById("mapZoomOutButton"),
+    mapZoomMenuButton: document.getElementById("mapZoomMenuButton"),
+    mapZoomMenu: document.getElementById("mapZoomMenu"),
+    mapZoomMenuOptions: [...document.querySelectorAll("[data-map-zoom-preference]")],
     mapZoomOutput: document.getElementById("mapZoomOutput"),
     mapZoomInButton: document.getElementById("mapZoomInButton"),
     boardBadge: document.getElementById("boardBadge"),
@@ -606,6 +612,7 @@
     core: null,
     phaseFlow: null,
     mapZoom: null,
+    mapZoomControlsUi: null,
     mapZoomPreference: "fit",
     mapZoomLevel: 1,
     mapZoomResizeTimer: null,
@@ -1229,10 +1236,11 @@
 
   async function init() {
     try {
-      const [core, phaseFlow, mapZoom, aiHeuristics, aiPhaseSearch, aiTactics, scenario, rules, aiWeights] = await Promise.all([
+      const [core, phaseFlow, mapZoom, mapZoomControlsUi, aiHeuristics, aiPhaseSearch, aiTactics, scenario, rules, aiWeights] = await Promise.all([
         coreRulesPromise,
         phaseFlowPromise,
         mapZoomPromise,
+        mapZoomControlsPromise,
         aiHeuristicsPromise,
         aiPhaseSearchPromise,
         aiTacticsPromise,
@@ -1243,6 +1251,7 @@
       app.core = core;
       app.phaseFlow = phaseFlow;
       app.mapZoom = mapZoom;
+      app.mapZoomControlsUi = mapZoomControlsUi;
       app.mapZoomPreference = app.mapZoom.readFoundationMapZoomPreference(localStorage);
       app.mapZoomLevel = app.mapZoomPreference === app.mapZoom.FIT_MAP_ZOOM
         ? app.mapZoom.DEFAULT_MAP_ZOOM
@@ -1260,7 +1269,7 @@
       app.distanceCache.clear();
       app.state = makeInitialState();
       wireUi();
-      applyMapZoom(app.mapZoomLevel, { preserveCenter: false, persist: false });
+      applyMapZoom(app.mapZoomLevel, { preserveCenter: false });
       loadImages();
       applyLanguage();
       updateMenu();
@@ -1290,8 +1299,22 @@
 
   function wireUi() {
     el.boardSurface.addEventListener("click", onBoardClick);
-    el.mapZoomOutButton.addEventListener("click", () => changeMapZoom(-1));
-    el.mapZoomInButton.addEventListener("click", () => changeMapZoom(1));
+    app.mapZoomControlsUi.wirePressAndHoldButton(el.mapZoomOutButton, (kind) => changeMapZoom(-1, kind));
+    app.mapZoomControlsUi.wirePressAndHoldButton(el.mapZoomInButton, (kind) => changeMapZoom(1, kind));
+    el.mapZoomMenuButton.addEventListener("click", toggleMapZoomMenu);
+    el.mapZoomMenuOptions.forEach((option) => option.addEventListener("click", () => {
+      setMapZoomPreference(option.dataset.mapZoomPreference, { restoreMenuFocus: true });
+    }));
+    el.mapZoomMenu.addEventListener("keydown", onMapZoomMenuKeydown);
+    document.addEventListener("click", (event) => {
+      if (!el.mapZoomControls.contains(event.target)) closeMapZoomMenu();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !el.mapZoomMenu.hidden) {
+        event.preventDefault();
+        closeMapZoomMenu({ restoreFocus: true });
+      }
+    });
     window.addEventListener("resize", onMapZoomViewportResize);
     el.langZhButton.addEventListener("click", () => setLanguage("zh"));
     el.langEnButton.addEventListener("click", () => setLanguage("en"));
@@ -1371,9 +1394,7 @@
     el.aarView.hidden = view !== "aar";
     if (view === "game") {
       window.setTimeout(() => {
-        if (app.mapZoomPreference === app.mapZoom.FIT_MAP_ZOOM) {
-          applyFitMapZoom({ preserveCenter: false });
-        }
+        applyPreferredMapZoom({ preserveCenter: false });
         centerOnOpeningFront();
       }, 30);
     }
@@ -1518,15 +1539,22 @@
     el.boardViewport.scrollTop = 0;
   }
 
-  function changeMapZoom(direction) {
-    const nextZoom = app.mapZoom.stepMapZoom(app.mapZoomLevel, direction);
-    app.mapZoomPreference = nextZoom;
-    applyMapZoom(nextZoom);
+  function changeMapZoom(direction, kind = "click") {
+    const step = kind === "hold" ? app.mapZoom.MAP_ZOOM_HOLD_STEP : app.mapZoom.MAP_ZOOM_CLICK_STEP;
+    const nextPreference = app.mapZoom.adjustMapZoomPreference(app.mapZoomPreference, direction, step);
+    setMapZoomPreference(nextPreference);
   }
 
-  function applyMapZoom(nextZoom, { preserveCenter = true, persist = true } = {}) {
-    const currentZoom = app.mapZoom.clampMapZoom(app.mapZoomLevel);
-    const normalizedZoom = app.mapZoom.clampMapZoom(nextZoom);
+  function setMapZoomPreference(preference, { restoreMenuFocus = false } = {}) {
+    app.mapZoomPreference = app.mapZoom.normalizeMapZoomPreference(preference);
+    app.mapZoom.writeFoundationMapZoomPreference(localStorage, app.mapZoomPreference);
+    closeMapZoomMenu({ restoreFocus: restoreMenuFocus });
+    applyPreferredMapZoom();
+  }
+
+  function applyMapZoom(nextZoom, { preserveCenter = true } = {}) {
+    const currentZoom = app.mapZoom.clampRenderedMapZoom(app.mapZoomLevel);
+    const normalizedZoom = app.mapZoom.clampRenderedMapZoom(nextZoom);
     const nextScroll = preserveCenter
       ? app.mapZoom.preserveMapViewportCenter({
           scrollLeft: el.boardViewport.scrollLeft,
@@ -1546,7 +1574,6 @@
     el.mapZoomStage.style.width = `${stageSize.width}px`;
     el.mapZoomStage.style.height = `${stageSize.height}px`;
     el.boardSurface.style.transform = `scale(${normalizedZoom})`;
-    if (persist) localStorage.setItem(app.mapZoom.FOUNDATION_MAP_ZOOM_STORAGE_KEY, String(normalizedZoom));
     drawMapZoomControls();
     if (nextScroll) {
       el.boardViewport.scrollLeft = nextScroll.scrollLeft;
@@ -1554,38 +1581,89 @@
     }
   }
 
-  function applyFitMapZoom({ preserveCenter = true } = {}) {
-    if (!app.mapZoom || app.mapZoomPreference !== app.mapZoom.FIT_MAP_ZOOM || el.body.dataset.view !== "game") return;
+  function applyPreferredMapZoom({ preserveCenter = true } = {}) {
+    if (!app.mapZoom || el.body.dataset.view !== "game") return;
     const fittedZoom = app.mapZoom.calculateFitMapZoom({
       viewportWidth: el.boardViewport.clientWidth,
       viewportHeight: el.boardViewport.clientHeight,
       mapWidth: app.scenario.board.width,
       mapHeight: app.scenario.board.height,
     });
-    applyMapZoom(fittedZoom, { preserveCenter, persist: false });
+    const preferredZoom = app.mapZoom.calculateMapZoomForPreference({
+      fitZoom: fittedZoom,
+      preference: app.mapZoomPreference,
+    });
+    applyMapZoom(preferredZoom, { preserveCenter });
   }
 
   function onMapZoomViewportResize() {
-    if (!app.mapZoom || app.mapZoomPreference !== app.mapZoom.FIT_MAP_ZOOM) return;
+    if (!app.mapZoom) return;
     window.clearTimeout(app.mapZoomResizeTimer);
-    app.mapZoomResizeTimer = window.setTimeout(() => applyFitMapZoom(), 60);
+    app.mapZoomResizeTimer = window.setTimeout(() => applyPreferredMapZoom(), 60);
+  }
+
+  function toggleMapZoomMenu() {
+    const willOpen = el.mapZoomMenu.hidden;
+    el.mapZoomMenu.hidden = !willOpen;
+    el.mapZoomMenuButton.setAttribute("aria-expanded", String(willOpen));
+    if (willOpen) {
+      const checkedOption = el.mapZoomMenuOptions.find((option) => option.getAttribute("aria-checked") === "true");
+      (checkedOption || el.mapZoomMenuOptions[0])?.focus();
+    }
+  }
+
+  function closeMapZoomMenu({ restoreFocus = false } = {}) {
+    app.mapZoomControlsUi.closeMapZoomMenuElement(
+      el.mapZoomMenu,
+      el.mapZoomMenuButton,
+      { restoreFocus },
+    );
+  }
+
+  function onMapZoomMenuKeydown(event) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeMapZoomMenu({ restoreFocus: true });
+      return;
+    }
+    const currentIndex = el.mapZoomMenuOptions.indexOf(document.activeElement);
+    const nextIndex = app.mapZoomControlsUi.nextMapZoomMenuIndex(
+      currentIndex,
+      event.key,
+      el.mapZoomMenuOptions.length,
+    );
+    if (nextIndex === null) return;
+    event.preventDefault();
+    el.mapZoomMenuOptions[nextIndex].focus();
+  }
+
+  function updateMapZoomControlsOffset() {
+    const scrollbarWidth = Math.max(0, el.boardViewport.offsetWidth - el.boardViewport.clientWidth);
+    el.mapZoomControls.style.setProperty("--map-scrollbar-width", `${scrollbarWidth}px`);
   }
 
   function drawMapZoomControls() {
     if (!app.mapZoom) return;
     const levels = app.mapZoom.MAP_ZOOM_LEVELS;
-    const current = app.mapZoom.clampMapZoom(app.mapZoomLevel);
+    const isFit = app.mapZoomPreference === app.mapZoom.FIT_MAP_ZOOM;
+    const manualPreference = isFit ? app.mapZoom.DEFAULT_MAP_ZOOM : app.mapZoom.normalizeMapZoom(app.mapZoomPreference);
     el.mapZoomControls.setAttribute("aria-label", tr("ui.mapZoom"));
     el.mapZoomOutButton.setAttribute("aria-label", tr("ui.mapZoomOut"));
     el.mapZoomOutButton.title = tr("ui.mapZoomOut");
-    el.mapZoomOutButton.disabled = current <= levels[0];
-    const zoomText = app.mapZoom.formatMapZoom(current);
-    el.mapZoomOutput.textContent = app.mapZoomPreference === app.mapZoom.FIT_MAP_ZOOM
-      ? `${tr("ui.mapZoomFit")} ${zoomText}`
-      : zoomText;
+    el.mapZoomOutButton.disabled = !isFit && manualPreference <= levels[0];
+    const zoomText = app.mapZoom.formatMapZoom(app.mapZoomLevel);
+    el.mapZoomOutput.textContent = isFit ? `${tr("ui.mapZoomFit")} ${zoomText}` : app.mapZoom.formatMapZoom(manualPreference);
+    el.mapZoomMenuButton.setAttribute("aria-label", tr("ui.mapZoomChoose"));
+    el.mapZoomMenuButton.title = tr("ui.mapZoomChoose");
+    el.mapZoomMenuOptions.forEach((option) => {
+      const optionPreference = app.mapZoom.normalizeMapZoomPreference(option.dataset.mapZoomPreference);
+      option.setAttribute("aria-checked", String(optionPreference === app.mapZoomPreference));
+    });
     el.mapZoomInButton.setAttribute("aria-label", tr("ui.mapZoomIn"));
     el.mapZoomInButton.title = tr("ui.mapZoomIn");
-    el.mapZoomInButton.disabled = current >= levels[levels.length - 1];
+    el.mapZoomInButton.disabled = !isFit && manualPreference >= levels[levels.length - 1];
+    updateMapZoomControlsOffset();
   }
 
   function onBoardClick(event) {

@@ -71,7 +71,12 @@ export function validateMapZoomLayout(
   check(Math.abs(geometry.mapAspectRatio - 2448 / 1696) < 0.001, `map aspect ratio changed to ${geometry.mapAspectRatio}`);
   check(geometry.topbar.transform === "none", `topbar unexpectedly transformed: ${geometry.topbar.transform}`);
   check(geometry.sidePanel.transform === "none", `side panel unexpectedly transformed: ${geometry.sidePanel.transform}`);
-  check(geometry.controls.top >= geometry.viewport.top && geometry.controls.right <= geometry.viewport.right + tolerance, "zoom controls overlap outside the map viewport");
+  const viewportClientRight = geometry.viewport.left + geometry.viewport.clientWidth;
+  check(
+    geometry.controls.right <= viewportClientRight + tolerance,
+    `zoom controls overlap the map viewport scrollbar: ${geometry.controls.right}/${viewportClientRight}`,
+  );
+  check(geometry.controls.top >= geometry.viewport.top, "zoom controls overlap above the map viewport");
   check(geometry.images.total > 0 && geometry.images.complete === geometry.images.total, `only ${geometry.images.complete}/${geometry.images.total} images loaded`);
   return failures;
 
